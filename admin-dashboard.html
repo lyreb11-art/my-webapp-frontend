@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin Dashboard</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<header>🛠️ Admin Dashboard <button onclick="logout()" style="float:right; margin-top:-5px;">Logout</button></header>
+
+<div class="card">
+    <div class="section">
+        <h3>📋 All Appointments</h3>
+        <button onclick="loadAppointments()">Refresh</button>
+        <div id="appointmentsList">Loading...</div>
+    </div>
+
+    <div class="section">
+        <h3>📄 Report Requests</h3>
+        <button onclick="loadRequests()">Refresh</button>
+        <div id="requestsList">Loading...</div>
+    </div>
+
+    <div class="section">
+        <h3>📤 Upload Report</h3>
+        <input id="upload_pid" placeholder="Patient ID" type="number">
+        <input id="upload_test" placeholder="Test Name">
+        <input type="file" id="reportFile" accept=".pdf">
+        <button onclick="uploadReport()">Upload Report</button>
+    </div>
+</div>
+
+<script>
+// Check login
+if (!localStorage.getItem("admin")) {
+    alert("Please login");
+    window.location.href = "/admin/admin-login.html";
+}
+
+// Load data
+loadAppointments();
+loadRequests();
+
+// Logout
+function logout() {
+    localStorage.removeItem("admin");
+    window.location.href = "/admin/admin-login.html";
+}
+
+// Load appointments
+// Load appointments with status buttons
+function loadAppointments() {
+    console.log("📅 Loading appointments...");
+
+    fetch("/admin/appointments")
+    .then(response => response.json())
+    .then(appointments => {
+        const list = document.getElementById("appointmentsList");
+        list.innerHTML = "";
+
+        if (!appointments || appointments.length === 0) {
+            list.innerHTML = "<p>No appointments found</p>";
+            return;
+        }
+
+        console.log(`Found ${appointments.length} appointments`);
+
+        // Group by status
+        const booked = appointments.filter(a => a.status === 'Booked');
+        const completed = appointments.filter(a => a.status === 'Completed');
+        const cancelled = appointments.filter(a => a.status === 'Cancelled');
+
+        // Display booked appointments first
+        if (booked.length > 0) {
+            const bookedHeader = document.createElement("h4");
+            bookedHeader.innerHTML = "⏳ BOOKED APPOINTMENTS";
+            bookedHeader.style.color = "orange";
+            list.appendChild(bookedHeader);
+
+            booked.forEach(apt => {
+                const div = document.createElement("div");
+                div.className = "appointment-item";
+                div.style.borderLeft = "4px solid orange";
+                div.innerHTML = `
+                    <strong>👤 ${apt.patient_name}</strong><br>
+                    Patient ID: ${apt.patient_id}<br>
+                    Date: ${apt.appointment_date}<br>
+                    Treatment: ${apt.treatment}<br>
+                    Status: <span style="color: orange;">⏳ ${apt.status}</span><br>
+
+                    <div style="margin-top: 10px;">
+                        <button onclick="updateAppointmentStatus(${apt.id}, 'Completed')" style="background: green;">
+                            ✅ Mark Complete
+                        </button>
+                        <button onclick="updateAppointmentStatus(${apt.id}, 'Cancelled')" style="background: red;">
+                            ❌ Cancel
+                        </button>
+                    </div>
+                    <hr>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        // Display completed appointments
+        if (completed.length > 0) {
+            const completedHeader = document.createElement("h4");
+            completedHeader.innerHTML = "✅ COMPLETED APPOINTMENTS";
+            completedHeader.style.color = "green";
+            list.appendChild(completedHeader);
+
+            completed.forEach(apt => {
+                const div = document.createElement("div");
+                div.className = "appointment-item";
+                div.style.borderLeft = "4px solid green";
+                div.innerHTML = `
+                    <strong>👤 ${apt.patient_name}</strong><br>
+                    Patient ID: ${apt.patient_id}<br>
+                    Date: ${apt.appointment_date}<br>
+                    Treatment: ${apt.treatment}<br>
+                    Status: <span style="color: green;">✅ ${apt.status}</span><br>
+                    <hr>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        // Display cancelled appointments
+        if (cancelled.length > 0) {
+            const cancelledHeader = document.createElement("h4");
+            cancelledHeader.innerHTML = "❌ CANCELLED APPOINTMENTS";
+            cancelledHeader.style.color = "red";
+            list.appendChild(cancelledHeader);
+
+            cancelled.forEach(apt => {
+                const div = document.createElement("div");
+                div.className = "appointment-item";
+                div.style.borderLeft = "4px solid red";
+                div.innerHTML = `
+                    <strong>👤 ${apt.patient_name}</strong><br>
+                    Patient ID: ${apt.patient_id}<br>
+                    Date: ${apt.appointment_date}<br>
+                    Treatment: ${apt.treatment}<br>
+                    Status: <span style="color: red;">❌ ${apt.status}</span><br>
+                    <hr>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        // Show summary
+        const summaryDiv = document.createElement("div");
+        summaryDiv.style.marginTop = "20px";
+        summaryDiv.style.padding = "10px";
+        summaryDiv.style.background = "#f0f0f0";
+        summaryDiv.style.borderRadius = "5px";
+        summaryDiv.innerHTML = `
+            <strong>📊 Appointment Summary:</strong><br>
+            ⏳ Booked: ${booked.length}<br>
+            ✅ Completed: ${completed.length}<br>
+            ❌ Cancelled: ${cancelled.length}<br>
+            📋 Total: ${appointments.length}
+        `;
+        list.appendChild(summaryDiv);
+
+    })
+    .catch(err => {
+        console.error("Error loading appointments:", err);
+        document.getElementById("appointmentsList").innerHTML =
+            "<p style='color: red;'>Error loading appointments</p>";
+    });
+}
+
+// Update appointment status
+function updateAppointmentStatus(appointmentId, newStatus) {
+    if (!confirm(`Change appointment status to "${newStatus}"?`)) {
+        return;
+    }
+
+    fetch("/admin/update-appointment-status", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            appointment_id: appointmentId,
+            status: newStatus
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+            loadAppointments(); // Refresh the list
+        } else {
+            alert(`❌ Error: ${data.error}`);
+        }
+    })
+    .catch(err => {
+        console.error("Error updating appointment:", err);
+        alert("❌ Failed to update appointment");
+    });
+}
+
+
+
+// Load report requests with better error handling
+function loadRequests() {
+    console.log("📄 Loading report requests...");
+
+    fetch("/admin/report-requests")
+    .then(response => {
+        console.log("Response status:", response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(allReports => {
+        console.log("All reports received:", allReports);
+
+        const list = document.getElementById("requestsList");
+        list.innerHTML = "";
+
+        if (!allReports || allReports.length === 0) {
+            list.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #666;">
+                    <p>📭 No report requests found</p>
+                    <p><small>Ask a patient to request a report first</small></p>
+                </div>
+            `;
+            return;
+        }
+
+        // Filter reports
+        const pendingReports = allReports.filter(r =>
+            r.status === 'Pending' || !r.status
+        );
+
+        const uploadedReports = allReports.filter(r =>
+            r.status === 'Uploaded' || r.status === 'Completed'
+        );
+
+        console.log(`Pending: ${pendingReports.length}, Uploaded: ${uploadedReports.length}`);
+
+        // Show pending reports
+        if (pendingReports.length > 0) {
+            const pendingHeader = document.createElement("h4");
+            pendingHeader.innerHTML = "⏳ PENDING REQUESTS - NEED ACTION";
+            pendingHeader.style.color = "orange";
+            pendingHeader.style.marginTop = "20px";
+            list.appendChild(pendingHeader);
+
+            pendingReports.forEach(req => {
+                const div = document.createElement("div");
+                div.className = "request-item";
+                div.style.borderLeft = "4px solid orange";
+                div.style.padding = "15px";
+                div.style.margin = "10px 0";
+                div.style.background = "#fff9e6";
+                div.innerHTML = `
+                    <strong>👤 Patient: ${req.patient_name}</strong><br>
+                    <strong>🆔 ID: ${req.patient_id}</strong><br>
+                    <strong>🧪 Test: ${req.test_name}</strong><br>
+                    📅 Requested: ${req.requested_at}<br>
+                    📊 Status: <span style="color: orange; font-weight: bold;">⏳ ${req.status || 'Pending'}</span><br>
+
+                    <div style="margin-top: 15px;">
+                        <input type="file" id="file_${req.id}" accept=".pdf" style="margin-bottom: 10px;">
+                        <button onclick="uploadReportForRequest(${req.patient_id}, '${req.test_name.replace(/'/g, "\\'")}', ${req.id})"
+                                style="background: #2563eb; color: white; padding: 8px 15px;">
+                            📤 Upload Report for this Request
+                        </button>
+                    </div>
+                    <hr>
+                `;
+                list.appendChild(div);
+            });
+        } else {
+            const noPendingDiv = document.createElement("div");
+            noPendingDiv.innerHTML = `
+                <div style="text-align: center; padding: 15px; background: #f0f9ff; border-radius: 5px;">
+                    <p>✅ No pending report requests</p>
+                    <p><small>All reports have been processed</small></p>
+                </div>
+            `;
+            list.appendChild(noPendingDiv);
+        }
+
+        // Show uploaded reports
+        if (uploadedReports.length > 0) {
+            const uploadedHeader = document.createElement("h4");
+            uploadedHeader.innerHTML = "✅ PROCESSED REPORTS";
+            uploadedHeader.style.color = "green";
+            uploadedHeader.style.marginTop = "30px";
+            list.appendChild(uploadedHeader);
+
+            uploadedReports.forEach(req => {
+                const div = document.createElement("div");
+                div.className = "request-item";
+                div.style.borderLeft = "4px solid green";
+                div.style.padding = "15px";
+                div.style.margin = "10px 0";
+                div.style.background = "#f0fff4";
+                div.innerHTML = `
+                    <strong>👤 ${req.patient_name}</strong><br>
+                    🆔 ID: ${req.patient_id}<br>
+                    🧪 Test: ${req.test_name}<br>
+                    📅 Requested: ${req.requested_at}<br>
+                    📤 Uploaded: ${req.upload_date || 'N/A'}<br>
+                    📊 Status: <span style="color: green; font-weight: bold;">✅ ${req.status}</span><br>
+                    ${req.s3_key ? `<small>📁 S3 Key: ${req.s3_key.substring(0, 50)}...</small><br>` : ''}
+                    <hr>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        // Show statistics
+        const statsDiv = document.createElement("div");
+        statsDiv.style.marginTop = "30px";
+        statsDiv.style.padding = "15px";
+        statsDiv.style.background = "#f8fafc";
+        statsDiv.style.border = "1px solid #e2e8f0";
+        statsDiv.style.borderRadius = "8px";
+        statsDiv.innerHTML = `
+            <strong>📈 Report Statistics:</strong><br>
+            ⏳ Pending Requests: <strong>${pendingReports.length}</strong><br>
+            ✅ Processed Reports: <strong>${uploadedReports.length}</strong><br>
+            📋 Total Reports in System: <strong>${allReports.length}</strong>
+        `;
+        list.appendChild(statsDiv);
+
+    })
+    .catch(err => {
+        console.error("Error loading reports:", err);
+        document.getElementById("requestsList").innerHTML = `
+            <div style="color: red; padding: 20px; text-align: center;">
+                <p>❌ Error loading reports</p>
+                <p><small>${err.message}</small></p>
+                <button onclick="loadRequests()" style="margin-top: 10px;">🔄 Retry</button>
+            </div>
+        `;
+    });
+}
+
+// Upload report for a specific request
+function uploadReportForRequest(patientId, testName, requestId) {
+    const fileInput = document.getElementById(`file_${requestId}`);
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert("Please select a PDF file");
+        return;
+    }
+
+    if (file.type !== "application/pdf") {
+        alert("Only PDF files are allowed");
+        return;
+    }
+
+    // 1️⃣ Generate presigned upload URL
+    fetch("/generate-upload-url", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            patient_id: patientId,
+            test_name: testName
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (!data.success) {
+            throw new Error(data.error || "Failed to generate upload URL");
+        }
+
+        // 2️⃣ Upload file to S3
+        return fetch(data.upload_url, {
+            method: "PUT",
+            headers: {"Content-Type": "application/pdf"},
+            body: file
+        }).then(() => data);
+    })
+    .then(data => {
+        // 3️⃣ Update DB record
+        return fetch("/upload-report", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                report_id: requestId,      // ✅ CORRECT REPORT ID
+                filename: file.name,
+                s3_key: data.s3_key
+            })
+        });
+    })
+    .then(res => res.json())
+    .then(result => {
+        if (!result.success) {
+            throw new Error(result.error || "DB update failed");
+        }
+
+        alert("✅ Report uploaded successfully");
+        fileInput.value = "";
+        loadRequests();   // Refresh admin list
+    })
+    .catch(err => {
+        console.error(err);
+        alert("❌ Upload failed: " + err.message);
+    });
+}
+
+
+
+// Fill form
+function fillForm(pid, test) {
+    document.getElementById("upload_pid").value = pid;
+    document.getElementById("upload_test").value = test;
+}
+
+// Manual upload form
+function uploadReport() {
+    const pid = document.getElementById("upload_pid").value;
+    const test = document.getElementById("upload_test").value;
+    const file = document.getElementById("reportFile").files[0];
+
+    if (!pid || !test || !file) {
+        alert("Please fill all fields and select a PDF file");
+        return;
+    }
+
+    if (file.type !== "application/pdf") {
+        alert("Please select a PDF file");
+        return;
+    }
+
+    // Get upload URL
+    fetch("/generate-upload-url", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            patient_id: parseInt(pid),
+            test_name: test
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) throw new Error(data.error);
+
+        return fetch(data.upload_url, {
+            method: "PUT",
+            headers: {'Content-Type': 'application/pdf'},
+            body: file
+        })
+        .then(() => {
+            return data; // Return data for next step
+        });
+    })
+    .then(data => {
+        // Save to database
+        return fetch("/upload-report", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                patient_id: parseInt(pid),
+                filename: file.name,
+                s3_key: data.s3_key,
+                test_name: test
+            })
+        });
+    })
+    .then(response => response.json())
+    .then(result => {
+        alert("✅ Report uploaded and saved successfully!");
+        // Clear form
+        document.getElementById("upload_pid").value = "";
+        document.getElementById("upload_test").value = "";
+        document.getElementById("reportFile").value = "";
+        // Refresh lists
+        loadRequests();
+    })
+    .catch(err => {
+        alert("❌ Upload failed: " + err.message);
+        console.error(err);
+    });
+}
+
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,110 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<title>Patient Portal</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<header>🦷 Dental Clinic - Patient Portal</header>
+
+<div class="card">
+    <h3>📋 Login</h3>
+    <input id="login" placeholder="📧 Email or 📱 Phone Number">
+    <input id="password" type="password" placeholder="🔐 Password">
+    <button onclick="login()">Login</button>
+
+    <hr style="margin: 20px 0;">
+
+    <h3>📝 New Patient Registration</h3>
+    <input id="reg_name" placeholder="👤 Full Name">
+    <input id="reg_email" placeholder="📧 Email">
+    <input id="reg_phone" placeholder="📱 Phone Number">
+    <input id="reg_password" type="password" placeholder="🔐 Password">
+    <button onclick="register()" style="background: #10b981;">Register</button>
+</div>
+
+<script>
+// Login
+function login() {
+    const login = document.getElementById("login").value;
+    const password = document.getElementById("password").value;
+
+    if (!login || !password) {
+        alert("Enter both fields");
+        return;
+    }
+
+    fetch("/patient/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            login: login,
+            password: password
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            localStorage.setItem("pid", data.patient_id);
+            localStorage.setItem("patient_name", data.patient_name);
+            alert("✅ Login successful!");
+            window.location.href = "/patient/patient-dashboard.html";
+        } else {
+            alert("❌ " + data.error);
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Server error");
+    });
+}
+
+// Register
+// Register function in patient-login.html
+function register() {
+    const name = document.getElementById("reg_name").value;
+    const email = document.getElementById("reg_email").value;
+    const phone = document.getElementById("reg_phone").value;
+    const password = document.getElementById("reg_password").value;
+
+    if (!name || !email || !phone || !password) {
+        alert("Please fill all fields");
+        return;
+    }
+
+    fetch("/patient/register", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            name: name,
+            email: email,
+            phone: phone,
+            password: password
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log("Registration response:", data);
+        if (data.success === true) {
+            alert("✅ Registration successful! Logging you in...");
+            // Store user data
+            localStorage.setItem("pid", data.patient_id);
+            localStorage.setItem("patient_name", name);
+            // Redirect to dashboard
+            window.location.href = "/patient/patient-dashboard.html";
+        } else {
+            alert("❌ Registration failed: " + (data.error || "Unknown error"));
+        }
+    })
+    .catch(error => {
+        console.error("Registration error:", error);
+        alert("❌ Server error during registration");
+    });
+}
+</script>
+
+
+</body>
+</html>

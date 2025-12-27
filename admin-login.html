@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin Login</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<header>👨‍⚕️ Bright Smile Admin Login</header>
+
+<div class="card">
+    <h3>Admin Login</h3>
+    <input id="user" placeholder="👤 Username">
+    <input id="pass" type="password" placeholder="🔑 Password">
+    <button onclick="login()">Login</button>
+</div>
+
+<script>
+function login() {
+    const username = document.getElementById("user").value;
+    const password = document.getElementById("pass").value;
+
+    if (!username || !password) {
+        alert("Enter credentials");
+        return;
+    }
+
+    fetch("/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            localStorage.setItem("admin", "true");
+            alert("✅ Login successful!");
+            window.location.href = "/admin/admin-dashboard.html";
+        } else {
+            alert("❌ Wrong credentials");
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Server error");
+    });
+}
+</script>
+
+
+</body>
+</html>

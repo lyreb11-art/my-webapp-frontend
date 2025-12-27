@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Patient Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>🙋‍♂️ Welcome, <span id="patientName">Patient</span></header>
+
+    <div class="card">
+        <div class="section">
+            <h3>📅 Book Appointment</h3>
+            <input id="date" type="date">
+            <select id="treatment">
+                <option value="">Select Treatment</option>
+                <option value="Teeth Cleaning">Teeth Cleaning</option>
+                <option value="Root Canal">Root Canal</option>
+                <option value="Braces Consultation">Braces Consultation</option>
+                <option value="Dental Implant">Dental Implant</option>
+            </select>
+            <button id="bookBtn">Book Appointment</button>
+        </div>
+
+        <div class="section">
+            <h3>📋 Request Report</h3>
+            <input id="testName" placeholder="Enter test/report name">
+            <button id="requestBtn">Request Report</button>
+        </div>
+
+        <div class="section">
+            <h3>📄 My Reports</h3>
+            <div id="reportsList">Loading reports...</div>
+        </div>
+    </div>
+
+<script>
+    // Check login
+    const pid = localStorage.getItem("pid");
+    if (!pid) {
+        alert("Please login first");
+        window.location.href = "/patient/patient-login.html";
+    }
+
+    // Show patient name
+    const patientName = localStorage.getItem("patient_name");
+    if (patientName) {
+        document.getElementById("patientName").textContent = patientName;
+    }
+
+    // Load reports on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("Page loaded, patient ID:", pid);
+        loadReports();
+
+        // Add button event listeners
+        document.getElementById('bookBtn').addEventListener('click', bookAppointment);
+        document.getElementById('requestBtn').addEventListener('click', requestReport);
+    });
+
+    // Book Appointment Function
+    function bookAppointment() {
+        console.log("📅 Book Appointment button clicked");
+
+        const date = document.getElementById("date").value;
+        const treatment = document.getElementById("treatment").value;
+
+        console.log("Date:", date, "Treatment:", treatment);
+
+        if (!date) {
+            alert("Please select a date");
+            return;
+        }
+        if (!treatment) {
+            alert("Please select a treatment");
+            return;
+        }
+
+        console.log("Sending request to /book-appointment...");
+
+        fetch("/book-appointment", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                patient_id: parseInt(pid),
+                date: date,
+                treatment: treatment
+            })
+        })
+        .then(response => {
+            console.log("Response status:", response.status);
+            console.log("Response headers:", response.headers);
+            return response.text().then(text => {
+                console.log("Raw response:", text);
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error("Failed to parse JSON:", text);
+                    return { success: false, error: "Invalid response from server" };
+                }
+            });
+        })
+        .then(data => {
+            console.log("Parsed response data:", data);
+            if (data.success) {
+                alert("✅ Appointment booked successfully!");
+                // Clear form
+                document.getElementById("date").value = "";
+                document.getElementById("treatment").selectedIndex = 0;
+            } else {
+                alert("❌ Error: " + (data.error || "Booking failed"));
+            }
+        })
+        .catch(error => {
+            console.error("Fetch error:", error);
+            alert("❌ Network error. Is the server running?");
+        });
+    }
+
+    // Request Report Function
+
+function requestReport() {
+    const testName = document.getElementById("testName").value.trim();
+
+    if (!testName) {
+        alert("Please enter a test name");
+        return;
+    }
+
+    console.log("📋 Requesting report:", testName);
+
+    fetch("/request-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            patient_id: parseInt(pid),
+            test_name: testName
+        })
+    })
+    .then(response => {
+        console.log("Response status:", response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log("Server response:", data);
+        if (data.success) {
+            alert("✅ Report requested successfully! ID: " + (data.report_id || "N/A"));
+            document.getElementById("testName").value = "";
+        } else {
+            alert("❌ Error: " + data.error);
+        }
+    })
+    .catch(error => {
+        console.error("Error:", error);
+        alert("Network error");
+    });
+}
+
+    // Load Reports Function
+function loadReports() {
+    console.log("📄 Loading reports...");
+
+    fetch("/reports/" + pid)
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('HTTP ${response.status}');
+        }
+        return response.json();
+    })
+    .then(reports => {
+        const list = document.getElementById("reportsList");
+        list.innerHTML = "";
+
+        if (!reports || reports.length === 0) {
+            list.innerHTML = "<p>No reports available yet</p>";
+            return;
+        }
+
+        reports.forEach(report => {
+            const div = document.createElement("div");
+            div.className = "report-item";
+
+            let actionHTML = "";
+            if (report.status === "Uploaded" && report.download_url) {
+                actionHTML = `
+                    <a href="${report.download_url}" target="_blank" style="color: green;">
+                        📥 Download Report
+                    </a>
+                `;
+            } else {
+                actionHTML = `
+                    <span style="color: orange;">⏳ Pending</span>
+                `;
+            }
+
+            div.innerHTML = `
+                <strong>${report.test_name}</strong><br>
+                Status: ${report.status}<br>
+                ${actionHTML}
+                <hr>
+            `;
+
+            list.appendChild(div);
+        });
+    })
+    .catch(error => {
+        console.error("Error loading reports:", error);
+        document.getElementById("reportsList").innerHTML =
+            "<p>Error loading reports</p>";
+    });
+}
+
+
+</script>
+</body>
+</html>
